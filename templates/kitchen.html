@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>接单</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; padding: 16px; background: #eef1f5; }
+    h1 { font-size: 20px; }
+    .order { background: #fff; padding: 14px; border-radius: 12px; margin-bottom: 12px;
+             border-left: 6px solid #ff7043; }
+    .time { color: #888; font-size: 13px; }
+    .note { color: #d84315; margin-top: 6px; font-size: 14px; }
+    .done-btn { margin-top: 10px; padding: 8px 14px; border: none; border-radius: 8px;
+                background: #4caf50; color: #fff; }
+  </style>
+</head>
+<body>
+  <h1>📋 接单列表</h1>
+  <div id="orders">加载中...</div>
+
+<script>
+  async function load() {
+    const res = await fetch('/api/orders');
+    const orders = await res.json();
+    const box = document.getElementById('orders');
+
+    if (orders.length === 0) {
+      box.innerHTML = '<p>暂无新订单</p>';
+      return;
+    }
+
+    box.innerHTML = orders.slice().reverse().map(o => `
+      <div class="order">
+        <div class="time">#${o.id} · ${o.time}</div>
+        <div>${o.items.map(i => `${i.name} × ${i.qty}`).join('，')}</div>
+        ${o.note ? `<div class="note">备注：${o.note}</div>` : ''}
+        <button class="done-btn" onclick="done(${o.id})">已完成</button>
+      </div>
+    `).join('');
+  }
+
+  async function done(id) {
+    await fetch(`/api/order/${id}/done`, { method: 'POST' });
+    load();
+  }
+
+  load();
+  setInterval(load, 3000);
+</script>
+</body>
+</html>

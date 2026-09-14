@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>历史订单</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; padding: 16px; background: #f2f3f5; }
+    h1 { font-size: 20px; }
+    .order { background: #fff; padding: 14px; border-radius: 12px; margin-bottom: 12px;
+             box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+    .time { color: #888; font-size: 13px; }
+    .note { color: #d84315; margin-top: 6px; font-size: 14px; }
+    .empty { text-align: center; color: #999; padding: 60px 0; }
+  </style>
+</head>
+<body>
+  <h1>📜 历史订单</h1>
+  <div id="list">加载中...</div>
+
+<script>
+  async function load() {
+    const res = await fetch('/api/history');
+    const orders = await res.json();
+    const box = document.getElementById('list');
+
+    if (orders.length === 0) {
+      box.innerHTML = '<div class="empty">暂无历史订单</div>';
+      return;
+    }
+
+    box.innerHTML = orders.map(o => `
+      <div class="order">
+        <div class="time">#${o.id} · ${o.done_time || o.time}</div>
+        <div>${o.items.map(i => `${i.name} × ${i.qty}`).join('，')}</div>
+        ${o.note ? `<div class="note">备注：${o.note}</div>` : ''}
+      </div>
+    `).join('');
+  }
+
+  load();
+</script>
+</body>
+</html>

@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>点菜</title>
+  <style>
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      font-family: -apple-system, "PingFang SC", sans-serif;
+      margin: 0; padding: 0 0 130px;
+      background: #f2f3f5; color: #222;
+    }
+    .topbar {
+      position: sticky; top: 0; z-index: 20;
+      background: #ff7043; color: #fff;
+      padding: 12px 16px; font-size: 18px; font-weight: 600;
+      display: flex; justify-content: space-between; align-items: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .topbar select {
+      border: none; border-radius: 6px; padding: 4px 8px; font-size: 14px;
+      background: rgba(255,255,255,0.9);
+    }
+    .category {
+      padding: 16px 16px 6px; font-size: 15px; font-weight: 600; color: #666;
+      background: #f2f3f5;
+    }
+    .dish {
+      margin: 0 12px 10px; padding: 12px 14px;
+      background: #fff; border-radius: 12px;
+      display: flex; justify-content: space-between; align-items: center;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    }
+    .dish-left { display: flex; align-items: center; gap: 10px; }
+    .icon { font-size: 24px; }
+    .name { font-size: 15px; font-weight: 500; }
+    .controls { display: flex; align-items: center; }
+    .controls button {
+      width: 32px; height: 32px; border: none; border-radius: 50%;
+      font-size: 18px; background: #ff7043; color: #fff;
+    }
+    .qty { margin: 0 8px; font-weight: bold; min-width: 18px; text-align: center; }
+    .footer {
+      position: fixed; left: 0; right: 0; bottom: 0;
+      background: #fff; padding: 10px 14px;
+      box-shadow: 0 -2px 10px rgba(0,0,0,0.08);
+    }
+    .footer textarea {
+      width: 100%; padding: 8px 10px; border-radius: 8px;
+      border: 1px solid #ddd; box-sizing: border-box; font-size: 14px; resize: none;
+    }
+    .footer-row {
+      display: flex; justify-content: space-between; align-items: center; margin-top: 8px;
+    }
+    .summary { font-size: 14px; }
+    .summary b { color: #ff7043; }
+    .submit {
+      padding: 10px 22px; border: none; border-radius: 10px;
+      background: #ff7043; color: #fff; font-size: 15px;
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <span>🍚 今天吃什么</span>
+    <select id="catSelect" onchange="jumpTo(this.value)">
+      <option value="">跳转到分类</option>
+    </select>
+  </div>
+  <div id="menu"></div>
+
+  <div class="footer">
+    <textarea id="note" rows="1" placeholder="备注：少辣、不要葱……"></textarea>
+    <div class="footer-row">
+      <div class="summary">已选 <b id="count">0</b> 样</div>
+      <button class="submit" onclick="submitOrder()">提交订单</button>
+    </div>
+  </div>
+
+<script>
+  const menu = {{ menu | tojson }};
+  const cart = {};
+  const categories = [...new Set(menu.map(d => d.category))];
+
+  function renderMenu() {
+    let html = '';
+    categories.forEach((cat, idx) => {
+      html += `<div class="category" id="cat-${idx}">${cat}</div>`;
+      menu.filter(d => d.category === cat).forEach(d => {
+        html += `
+          <div class="dish">
+            <div class="dish-left">
+              <span class="icon">${d.icon}</span>
+              <span class="name">${d.name}</span>
+            </div>
+            <div class="controls">
+              <button onclick="change(${d.id}, -1)">−</button>
+              <span class="qty" id="qty-${d.id}">0</span>
+              <button onclick="change(${d.id}, 1)">+</button>
+            </div>
+          </div>
+        `;
+      });
+    });
+    document.getElementById('menu').innerHTML = html;
+
+    const sel = document.getElementById('catSelect');
+    categories.forEach((cat, idx) => {
+      const opt = document.createElement('option');
+      opt.value = 'cat-' + idx;
+      opt.innerText = cat;
+      sel.appendChild(opt);
+    });
+  }
+
+  function jumpTo(id) {
+    if (!id) return;
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    document.getElementById('catSelect').value = '';
+  }
+
+  function change(id, delta) {
+    cart[id] = (cart[id] || 0) + delta;
+    if (cart[id] < 0) cart[id] = 0;
+    document.getElementById('qty-' + id).innerText = cart[id];
+    updateCount();
+  }
+
+  function updateCount() {
+    const count = Object.values(cart).reduce((a, b) => a + b, 0);
+    document.getElementById('count').innerText = count;
+  }
+
+  async function submitOrder() {
+    const items = menu.filter(d => cart[d.id] > 0)
+      .map(d => ({ id: d.id, name: d.name, qty: cart[d.id] }));
+
+    if (items.length === 0) return alert('请先选菜');
+
+    const res = await fetch('/api/order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items, note: document.getElementById('note').value })
+    });
+    const data = await res.json();
+    if (data.ok) {
+      alert('下单成功！对方已收到');
+      location.reload();
+    } else {
+      alert(data.msg);
+    }
+  }
+
+  renderMenu();
+</script>
+</body>
+</html>

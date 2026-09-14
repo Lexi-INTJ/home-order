@@ -176,3 +176,146 @@ RAW_MENU = {
         "红枣粥",
     ],
 }
+
+# 自动生成带 id 和 icon 的菜单
+ICON_MAP = {
+    "炒菜·荤": "🍖", "炒菜·素": "🥬", "炖煮·荤": "🍲", "炖煮·素": "🍲",
+    "蒸菜·荤": "🐟", "蒸菜·素": "🥦", "凉拌·荤": "🥗", "凉拌·素": "🥗",
+    "煎炸·荤": "🍗", "煎炸·素": "🍟", "烤制": "🍢", "汤羹·荤": "🍲",
+    "汤羹·素": "🥣", "卤菜·荤": "🍗", "卤菜·素": "🧈", "主食·米饭": "🍚",
+    "主食·面条": "🍜", "主食·饼类": "🥞", "主食·包子饺子": "🥟",
+    "主食·粥类": "🥣",
+}
+
+MENU = []
+_id = 1
+for cat, names in RAW_MENU.items():
+    for name in names:
+        MENU.append({
+            "id": _id,
+            "name": name,
+            "icon": ICON_MAP.get(cat, "🍽️"),
+            "category": cat,
+        })
+        _id += 1
+
+DATA_FILE = "/tmp/orders.json"
+lock = threading.Lock()
+
+
+def load_orders():
+    if not os.path.exists(DATA_FILE):
+        return []
+    try:
+        with open(DATA_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def save_orders(orders):
+    with open(DATA_FILE, "w", encoding="utf-8") as f:
+        json.dump(orders, f, ensure_ascii=False, indent=2)
+
+
+orders = load_orders()
+
+
+def next_id():
+    return max([o["id"] for o in orders], default=0) + 1
+
+
+@app.route("/")
+def index():
+    return render_template("index.html", menu=MENU)
+
+
+@app.route("/api/menu")
+def get_menu():
+    return jsonify(MENU)
+
+
+@app.route("/api/order", methods=["POST"])
+def create_order():
+    data = request.json
+    items = data.get("items", [])
+    note = data.get("note", "")
+
+    if not items:
+        return jsonify({"ok": False, "msg": "请至少选择一道菜"})
+
+    with lock:
+        order = {
+            "id": next_id(),
+            "items": items,
+            "note": note,
+            "status": "pending",
+            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "date": datetime.now().strftime("%Y-%m-%d"),
+        }
+        orders.append(order)
+        save_orders(orders)
+
+    return jsonify({"ok": True, "order_id": order["id"]})
+
+
+@app.route("/api/orders")
+def get_orders():
+    with lock:
+        pending = [o for o in orders if o["status"] == "pending"]
+        return jsonify(pending)
+
+
+@app.route("/api/order/<int:order_id>/done", methods=["POST"])
+def mark_done(order_id):
+    with lock:
+        for o in orders:
+            if o["id"] == order_id:
+                o["status"] = "done"
+                o["done_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                save_orders(orders)
+                return jsonify({"ok": True})
+    return jsonify({"ok": False, "msg": "订单不存在"})
+
+
+@app.route("/api/history")
+def get_history():
+    date = request.args.get("date")
+    with lock:
+        done = [o for o in orders if o["status"] == "done"]
+        if date:
+            done = [o for o in done if o["date"] == date]
+        done.sort(key=lambda x: x.get("done_time", ""), reverse=True)
+        return jsonify(done)
+
+
+@app.route("/api/history/<int:order_id>", methods=["DELETE"])
+def delete_history(order_id):
+    global orders
+    with lock:
+        orders = [o for o in orders if o["id"] != order_id]
+        save_orders(orders)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/history/clear", methods=["POST"])
+def clear_history():
+    global orders
+    with lock:
+        orders = [o for o in orders if o["status"] != "done"]
+        save_orders(orders)
+    return jsonify({"ok": True})
+
+
+@app.route("/kitchen")
+def kitchen():
+    return render_template("kitchen.html")
+
+
+@app.route("/history")
+def history():
+    return render_template("history.html")
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000, debug=True)

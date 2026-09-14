@@ -227,7 +227,7 @@ def next_id():
 
 @app.route("/")
 def index():
-    return render_template("index.html", menu=MENU)
+    return render_template("templates/index.html", menu=MENU)
 
 
 @app.route("/api/menu")
@@ -309,12 +309,12 @@ def clear_history():
 
 @app.route("/kitchen")
 def kitchen():
-    return render_template("kitchen.html")
+    return render_template("templates/kitchen.html")
 
 
 @app.route("/history")
 def history():
-    return render_template("history.html")
+    return render_template("templates/history.html")
 
 
 if __name__ == "__main__":
